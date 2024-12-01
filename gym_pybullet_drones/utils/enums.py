@@ -13,6 +13,9 @@ class DroneModel(Enum):
 class Physics(Enum):
     """Physics implementations enumeration class."""
 
+    PYB_DW_REAL_SIMPLENN = "pyb_dw_real_simplenn"
+    PYB_DW_REAL_LINEAR_COMB = "pyb_dw_real_linear_comb"
+    PYB_DW_REAL_SAMPLING = "pyb_dw_real_sampling"
     PYB = "pyb"                         # Base PyBullet physics update
     DYN = "dyn"                         # Explicit dynamics model
     PYB_GND = "pyb_gnd"                 # PyBullet physics update with ground effect
@@ -46,3 +49,12 @@ class ObservationType(Enum):
     """Observation type enumeration class."""
     KIN = "kin"     # Kinematic information (pose, linear and angular velocities)
     RGB = "rgb"     # RGB camera capture in each drone's POV
+
+################################################################################
+
+class DroneSeparation(Enum):
+    """Drone separation enumeration class."""
+    FAR = .4            # .4 meter separation between stacked drones
+    CLOSE = .1            # .1 meter separation between stacked drones
+
+################################################################################

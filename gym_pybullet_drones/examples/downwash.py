@@ -42,7 +42,7 @@ def run(
         colab=DEFAULT_COLAB
     ):
     #### Initialize the simulation #############################
-    INIT_XYZS = np.array([[.5, 0, 1],[-.5, 0, .5]])
+    INIT_XYZS = np.array([[.5, 0, 2],[-.5, 0, 1.8]])
     env = CtrlAviary(drone_model=drone,
                      num_drones=2,
                      initial_xyzs=INIT_XYZS,
@@ -60,7 +60,8 @@ def run(
     NUM_WP = control_freq_hz*PERIOD
     TARGET_POS = np.zeros((NUM_WP, 2))
     for i in range(NUM_WP):
-        TARGET_POS[i, :] = [0.5*np.cos(2*np.pi*(i/NUM_WP)), 0]
+        TARGET_POS[i, :] = [0, 0]
+        #TARGET_POS[i, :] = [0.5*np.cos(2*np.pi*(i/NUM_WP)), 0]
     wp_counters = np.array([0, int(NUM_WP/2)])
 
     #### Initialize the logger #################################

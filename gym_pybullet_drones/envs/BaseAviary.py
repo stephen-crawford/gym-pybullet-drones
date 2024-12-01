@@ -8,10 +8,15 @@ import pkg_resources
 from PIL import Image
 # import pkgutil
 # egl = pkgutil.get_loader('eglRenderer')
+import scipy.io
 import numpy as np
 import pybullet as p
 import pybullet_data
 import gymnasium as gym
+
+from gym_pybullet_drones.envs.phsyics import simplenn_downwash_calculator, lin_comb_downwash_calculator
+from gym_pybullet_drones.envs.phsyics.simplenn_downwash_calculator import calculate_downwash_force
+# from gym_pybullet_drones.envs.phsyics.downash_calculator import calculate_downwash_force
 from gym_pybullet_drones.utils.enums import DroneModel, Physics, ImageType
 
 
@@ -360,11 +365,25 @@ class BaseAviary(gym.Env):
                 elif self.PHYSICS == Physics.PYB_DW:
                     self._physics(clipped_action[i, :], i)
                     self._downwash(i)
+                elif self.PHYSICS == Physics.PYB_DW_REAL_SIMPLENN:
+                    self._physics(clipped_action[i, :], i)
+                    self._brown_downwash_simplenn(i)
+                elif self.PHYSICS == Physics.PYB_DW_REAL_LINEAR_COMB:
+                    self._physics(clipped_action[i, :], i)
+                    self._brown_downwash_lin_comb(i)
+                elif self.PHYSICS == Physics.PYB_DW_REAL_SAMPLING:
+                    self._physics(clipped_action[i, :], i)
+                    self._brown_downwash_sampling(i)
                 elif self.PHYSICS == Physics.PYB_GND_DRAG_DW:
                     self._physics(clipped_action[i, :], i)
                     self._groundEffect(clipped_action[i, :], i)
                     self._drag(self.last_clipped_action[i, :], i)
                     self._downwash(i)
+                elif self.PHYSICS == Physics.PYB_GND_DRAG_DW_REAL_SIMPLENN:
+                    self._physics(clipped_action[i, :], i)
+                    self._groundEffect(clipped_action[i, :], i)
+                    self._drag(self.last_clipped_action[i, :], i)
+                    self._brown_downwash_simplenn(i)
             #### PyBullet computes the new state, unless Physics.DYN ###
             if self.PHYSICS != Physics.DYN:
                 p.stepSimulation(physicsClientId=self.CLIENT)
@@ -802,6 +821,91 @@ class BaseAviary(gym.Env):
                 alpha = self.DW_COEFF_1 * (self.PROP_RADIUS/(4*delta_z))**2
                 beta = self.DW_COEFF_2 * delta_z + self.DW_COEFF_3
                 downwash = [0, 0, -alpha * np.exp(-.5*(delta_xy/beta)**2)]
+                p.applyExternalForce(self.DRONE_IDS[nth_drone],
+                                     4,
+                                     forceObj=downwash,
+                                     posObj=[0, 0, 0],
+                                     flags=p.LINK_FRAME,
+                                     physicsClientId=self.CLIENT
+                                     )
+
+    ################################################################################
+
+
+    def _brown_downwash_simplenn(self,
+                  nth_drone
+                  ):
+        """
+        Based on experiments conducted at the Brown ACT Lab by Anoop Kiran.
+
+        Parameters
+        ----------
+        nth_drone : int
+            The ordinal number/position of the desired drone in list self.DRONE_IDS.
+
+        """
+
+        for i in range(self.NUM_DRONES):
+            delta_z = self.pos[i, 2] - self.pos[nth_drone, 2]
+            delta_xy = np.linalg.norm(np.array(self.pos[i, 0:2]) - np.array(self.pos[nth_drone, 0:2]))
+            if .4 > delta_z > 0 and delta_xy < 0.07: # Ignore drones more than 2*crazyflie arm length meters away
+                downwash = [0, 0, -(simplenn_downwash_calculator.calculate_downwash_force(self.pos[i, 0], self.pos[i, 1], self.pos[i, 2], self.rpy[i, 0], self.rpy[i, 1], self.rpy[i, 2], 1, self.pos[nth_drone, 0], self.pos[nth_drone, 1], self.pos[nth_drone, 2], self.rpy[nth_drone, 0], self.rpy[nth_drone, 1], self.rpy[nth_drone, 2],  self.HOVER_RPM**2 * self.KF))]
+                p.applyExternalForce(self.DRONE_IDS[nth_drone],
+                                     4,
+                                     forceObj=downwash,
+                                     posObj=[0, 0, 0],
+                                     flags=p.LINK_FRAME,
+                                     physicsClientId=self.CLIENT
+                                     )
+
+    ################################################################################
+
+    def _brown_downwash_lin_comb(self,
+                  nth_drone
+                  ):
+        """
+        Based on experiments conducted at the Brown ACT Lab by Anoop Kiran.
+
+        Parameters
+        ----------
+        nth_drone : int
+            The ordinal number/position of the desired drone in list self.DRONE_IDS.
+
+        """
+
+        for i in range(self.NUM_DRONES):
+            delta_z = self.pos[i, 2] - self.pos[nth_drone, 2]
+            delta_xy = np.linalg.norm(np.array(self.pos[i, 0:2]) - np.array(self.pos[nth_drone, 0:2]))
+            if .4 > delta_z > 0 and delta_xy < 0.07: # Ignore drones more than 2*crazyflie arm length meters away
+                downwash = [0, 0, -(lin_comb_downwash_calculator.calculate_downwash_force(self.pos[i, 0], self.pos[i, 1], self.pos[i, 2], self.rpy[i, 0], self.rpy[i, 1], self.rpy[i, 2], 1, self.pos[nth_drone, 0], self.pos[nth_drone, 1], self.pos[nth_drone, 2], self.rpy[nth_drone, 0], self.rpy[nth_drone, 1], self.rpy[nth_drone, 2],  self.HOVER_RPM**2 * self.KF))]
+                p.applyExternalForce(self.DRONE_IDS[nth_drone],
+                                     4,
+                                     forceObj=downwash,
+                                     posObj=[0, 0, 0],
+                                     flags=p.LINK_FRAME,
+                                     physicsClientId=self.CLIENT
+                                     )
+
+    ################################################################################
+
+    def _brown_downwash_sampling(self,
+                  nth_drone
+                  ):
+        """
+        Based on experiments conducted at the Brown ACT Lab by Anoop Kiran.
+
+        Parameters
+        ----------
+        nth_drone : int
+            The ordinal number/position of the desired drone in list self.DRONE_IDS.
+
+        """
+
+        for i in range(self.NUM_DRONES):
+            delta_z = self.pos[i, 2] - self.pos[nth_drone, 2]
+            delta_xy = np.linalg.norm(np.array(self.pos[i, 0:2]) - np.array(self.pos[nth_drone, 0:2]))
+            if .4 > delta_z > 0 and delta_xy < 0.07: # Ignore drones more than 2*crazyflie arm length meters away
+                downwash = [0, 0, -(calculate_downwash_force(self.pos[i, 0], self.pos[i, 1], self.pos[i, 2], self.rpy[i, 0], self.rpy[i, 1], self.rpy[i, 2], 1, self.pos[nth_drone, 0], self.pos[nth_drone, 1], self.pos[nth_drone, 2], self.rpy[nth_drone, 0], self.rpy[nth_drone, 1], self.rpy[nth_drone, 2],  self.HOVER_RPM**2 * self.KF))]
                 p.applyExternalForce(self.DRONE_IDS[nth_drone],
                                      4,
                                      forceObj=downwash,
