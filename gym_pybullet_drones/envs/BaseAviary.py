@@ -14,9 +14,8 @@ import pybullet as p
 import pybullet_data
 import gymnasium as gym
 
-from gym_pybullet_drones.envs.phsyics import simplenn_downwash_calculator, lin_comb_downwash_calculator
-from gym_pybullet_drones.envs.phsyics.simplenn_downwash_calculator import calculate_downwash_force
-# from gym_pybullet_drones.envs.phsyics.downash_calculator import calculate_downwash_force
+from gym_pybullet_drones.envs.physics import simplenn_downwash_calculator, lin_comb_downwash_calculator, \
+    sampling_downwash_calculator
 from gym_pybullet_drones.utils.enums import DroneModel, Physics, ImageType
 
 
@@ -417,19 +416,19 @@ class BaseAviary(gym.Env):
             Unused.
 
         """
-        if self.first_render_call and not self.GUI:
-            print("[WARNING] BaseAviary.render() is implemented as text-only, re-initialize the environment using Aviary(gui=True) to use PyBullet's graphical interface")
-            self.first_render_call = False
-        print("\n[INFO] BaseAviary.render() ——— it {:04d}".format(self.step_counter),
-              "——— wall-clock time {:.1f}s,".format(time.time()-self.RESET_TIME),
-              "simulation time {:.1f}s@{:d}Hz ({:.2f}x)".format(self.step_counter*self.PYB_TIMESTEP, self.PYB_FREQ, (self.step_counter*self.PYB_TIMESTEP)/(time.time()-self.RESET_TIME)))
-        for i in range (self.NUM_DRONES):
-            print("[INFO] BaseAviary.render() ——— drone {:d}".format(i),
-                  "——— x {:+06.2f}, y {:+06.2f}, z {:+06.2f}".format(self.pos[i, 0], self.pos[i, 1], self.pos[i, 2]),
-                  "——— velocity {:+06.2f}, {:+06.2f}, {:+06.2f}".format(self.vel[i, 0], self.vel[i, 1], self.vel[i, 2]),
-                  "——— roll {:+06.2f}, pitch {:+06.2f}, yaw {:+06.2f}".format(self.rpy[i, 0]*self.RAD2DEG, self.rpy[i, 1]*self.RAD2DEG, self.rpy[i, 2]*self.RAD2DEG),
-                  "——— angular velocity {:+06.4f}, {:+06.4f}, {:+06.4f} ——— ".format(self.ang_v[i, 0], self.ang_v[i, 1], self.ang_v[i, 2]))
-    
+        # if self.first_render_call and not self.GUI:
+        #     print("[WARNING] BaseAviary.render() is implemented as text-only, re-initialize the environment using Aviary(gui=True) to use PyBullet's graphical interface")
+        #     self.first_render_call = False
+        # print("\n[INFO] BaseAviary.render() ——— it {:04d}".format(self.step_counter),
+        #       "——— wall-clock time {:.1f}s,".format(time.time()-self.RESET_TIME),
+        #       "simulation time {:.1f}s@{:d}Hz ({:.2f}x)".format(self.step_counter*self.PYB_TIMESTEP, self.PYB_FREQ, (self.step_counter*self.PYB_TIMESTEP)/(time.time()-self.RESET_TIME)))
+        # for i in range (self.NUM_DRONES):
+        #     print("[INFO] BaseAviary.render() ——— drone {:d}".format(i),
+        #           "——— x {:+06.2f}, y {:+06.2f}, z {:+06.2f}".format(self.pos[i, 0], self.pos[i, 1], self.pos[i, 2]),
+        #           "——— velocity {:+06.2f}, {:+06.2f}, {:+06.2f}".format(self.vel[i, 0], self.vel[i, 1], self.vel[i, 2]),
+        #           "——— roll {:+06.2f}, pitch {:+06.2f}, yaw {:+06.2f}".format(self.rpy[i, 0]*self.RAD2DEG, self.rpy[i, 1]*self.RAD2DEG, self.rpy[i, 2]*self.RAD2DEG),
+        #           "——— angular velocity {:+06.4f}, {:+06.4f}, {:+06.4f} ——— ".format(self.ang_v[i, 0], self.ang_v[i, 1], self.ang_v[i, 2]))
+        #
     ################################################################################
 
     def close(self):
@@ -545,15 +544,15 @@ class BaseAviary(gym.Env):
         The format of the video output is .mp4, if GUI is True, or .png, otherwise.
 
         """
-        if self.RECORD and self.GUI:
-            self.VIDEO_ID = p.startStateLogging(loggingType=p.STATE_LOGGING_VIDEO_MP4,
-                                                fileName=os.path.join(self.OUTPUT_FOLDER, "video-"+datetime.now().strftime("%m.%d.%Y_%H.%M.%S")+".mp4"),
-                                                physicsClientId=self.CLIENT
-                                                )
-        if self.RECORD and not self.GUI:
-            self.FRAME_NUM = 0
-            self.IMG_PATH = os.path.join(self.OUTPUT_FOLDER, "recording_" + datetime.now().strftime("%m.%d.%Y_%H.%M.%S"), '')
-            os.makedirs(os.path.dirname(self.IMG_PATH), exist_ok=True)
+        # if self.RECORD and self.GUI:
+        #     self.VIDEO_ID = p.startStateLogging(loggingType=p.STATE_LOGGING_VIDEO_MP4,
+        #                                         fileName=os.path.join(self.OUTPUT_FOLDER, "video-"+datetime.now().strftime("%m.%d.%Y_%H.%M.%S")+".mp4"),
+        #                                         physicsClientId=self.CLIENT
+        #                                         )
+        # if self.RECORD and not self.GUI:
+        #     self.FRAME_NUM = 0
+        #     self.IMG_PATH = os.path.join(self.OUTPUT_FOLDER, "recording_" + datetime.now().strftime("%m.%d.%Y_%H.%M.%S"), '')
+        #     os.makedirs(os.path.dirname(self.IMG_PATH), exist_ok=True)
     
     ################################################################################
 
@@ -877,7 +876,7 @@ class BaseAviary(gym.Env):
             delta_z = self.pos[i, 2] - self.pos[nth_drone, 2]
             delta_xy = np.linalg.norm(np.array(self.pos[i, 0:2]) - np.array(self.pos[nth_drone, 0:2]))
             if .4 > delta_z > 0 and delta_xy < 0.07: # Ignore drones more than 2*crazyflie arm length meters away
-                downwash = [0, 0, -(lin_comb_downwash_calculator.calculate_downwash_force(self.pos[i, 0], self.pos[i, 1], self.pos[i, 2], self.rpy[i, 0], self.rpy[i, 1], self.rpy[i, 2], 1, self.pos[nth_drone, 0], self.pos[nth_drone, 1], self.pos[nth_drone, 2], self.rpy[nth_drone, 0], self.rpy[nth_drone, 1], self.rpy[nth_drone, 2],  self.HOVER_RPM**2 * self.KF))]
+                downwash = [0, 0, -(lin_comb_downwash_calculator.calculate_downwash_force(self.pos[i, 0], self.pos[i, 1], self.pos[i, 2], self.pos[nth_drone, 0], self.pos[nth_drone, 1], self.pos[nth_drone, 2]))]
                 p.applyExternalForce(self.DRONE_IDS[nth_drone],
                                      4,
                                      forceObj=downwash,
@@ -905,7 +904,7 @@ class BaseAviary(gym.Env):
             delta_z = self.pos[i, 2] - self.pos[nth_drone, 2]
             delta_xy = np.linalg.norm(np.array(self.pos[i, 0:2]) - np.array(self.pos[nth_drone, 0:2]))
             if .4 > delta_z > 0 and delta_xy < 0.07: # Ignore drones more than 2*crazyflie arm length meters away
-                downwash = [0, 0, -(calculate_downwash_force(self.pos[i, 0], self.pos[i, 1], self.pos[i, 2], self.rpy[i, 0], self.rpy[i, 1], self.rpy[i, 2], 1, self.pos[nth_drone, 0], self.pos[nth_drone, 1], self.pos[nth_drone, 2], self.rpy[nth_drone, 0], self.rpy[nth_drone, 1], self.rpy[nth_drone, 2],  self.HOVER_RPM**2 * self.KF))]
+                downwash = [0, 0, -(sampling_downwash_calculator.calculate_downwash_force(self.pos[i, 0], self.pos[i, 1], self.pos[i, 2], self.pos[nth_drone, 0], self.pos[nth_drone, 1], self.pos[nth_drone, 2]))]
                 p.applyExternalForce(self.DRONE_IDS[nth_drone],
                                      4,
                                      forceObj=downwash,
